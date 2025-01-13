@@ -27,7 +27,7 @@
 #include "tmux.h"
 
 char *
-osdep_get_name(int fd, __unused char *tty)
+get_name(int fd, int full)
 {
 	FILE	*f;
 	char	*path, *buf;
@@ -48,16 +48,43 @@ osdep_get_name(int fd, __unused char *tty)
 	len = 0;
 	buf = NULL;
 	while ((ch = fgetc(f)) != EOF) {
-		if (ch == '\0')
-			break;
+		if (full) {
+			if (ch == '\0')
+				ch = ' ';
+			if (len == 0 && ch == '-') continue;
+		} else {
+			if (ch == '\0')
+				break;
+		}
 		buf = xrealloc(buf, len + 2);
 		buf[len++] = ch;
 	}
-	if (buf != NULL)
+	if (buf != NULL) {
+		if (len > 0 && buf[len - 1] == ' ')
+			--len;
 		buf[len] = '\0';
+	}
 
 	fclose(f);
 	return (buf);
+}
+
+char *
+osdep_get_name(int fd, __unused char *tty)
+{
+	return get_name(fd, 0);
+}
+
+char *
+osdep_get_full_name(int fd, __unused char *tty)
+{
+	return get_name(fd, 1);
+}
+
+long
+osdep_get_pid(int fd)
+{
+	return tcgetpgrp(fd);
 }
 
 char *

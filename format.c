@@ -817,8 +817,9 @@ format_cb_start_path(struct format_tree *ft)
 }
 
 /* Callback for pane_current_command. */
+/* Callback for pane_current_full_command. */
 static void *
-format_cb_current_command(struct format_tree *ft)
+_format_cb_current_command(struct format_tree *ft, int full)
 {
 	struct window_pane	*wp = ft->wp;
 	char			*cmd, *value;
@@ -826,7 +827,7 @@ format_cb_current_command(struct format_tree *ft)
 	if (wp == NULL || wp->shell == NULL)
 		return (NULL);
 
-	cmd = osdep_get_name(wp->fd, wp->tty);
+	cmd = full == 1 ? osdep_get_full_name(wp->fd, wp->tty) : osdep_get_name(wp->fd, wp->tty);
 	if (cmd == NULL || *cmd == '\0') {
 		free(cmd);
 		cmd = cmd_stringify_argv(wp->argc, wp->argv);
@@ -835,9 +836,25 @@ format_cb_current_command(struct format_tree *ft)
 			cmd = xstrdup(wp->shell);
 		}
 	}
-	value = parse_window_name(cmd);
-	free(cmd);
+	if (full == 1) {
+		value = cmd;
+	} else {
+		value = parse_window_name(cmd);
+		free(cmd);
+	}
 	return (value);
+}
+
+static void *
+format_cb_current_command(struct format_tree *ft)
+{
+	return _format_cb_current_command(ft, 0);
+}
+
+static void *
+format_cb_current_full_command(struct format_tree *ft)
+{
+	return _format_cb_current_command(ft, 1);
 }
 
 /* Callback for pane_current_path. */
@@ -854,6 +871,23 @@ format_cb_current_path(struct format_tree *ft)
 	if (cwd == NULL)
 		return (NULL);
 	return (xstrdup(cwd));
+}
+
+/* Callback for pane_current_pid. */
+static void *
+format_cb_current_pid(struct format_tree *ft)
+{
+	struct window_pane	*wp = ft->wp;
+	long pid;
+
+	if (wp == NULL || wp->shell == NULL)
+		return (NULL);
+
+	if ((pid = osdep_get_pid(wp->fd)) != -1)
+		return (format_printf("%ld", pid));
+	if (ft->c != NULL)
+		return (format_printf("%ld", (long)ft->c->pid));
+	return (NULL);
 }
 
 /* Callback for history_bytes. */
@@ -3016,8 +3050,14 @@ static const struct format_table_entry format_table[] = {
 	{ "pane_current_command", FORMAT_TABLE_STRING,
 	  format_cb_current_command
 	},
+	{ "pane_current_full_command", FORMAT_TABLE_STRING,
+	  format_cb_current_full_command
+	},
 	{ "pane_current_path", FORMAT_TABLE_STRING,
 	  format_cb_current_path
+	},
+	{ "pane_current_pid", FORMAT_TABLE_STRING,
+	  format_cb_current_pid
 	},
 	{ "pane_dead", FORMAT_TABLE_STRING,
 	  format_cb_pane_dead
